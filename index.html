@@ -1,144 +1,189 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Module Production Checklist</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Checklist Manager</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f8f9fa; font-size: 12px; }
-        .controls { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
-        table { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        th { background: #2c3e50; color: white; padding: 10px; position: sticky; top: 0; }
-        td { border: 1px solid #dee2e6; padding: 5px; vertical-align: top; }
-        
-        /* Cell Layout */
-        .cell-container { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
-        input[type="datetime-local"], select { font-size: 11px; padding: 2px; border: 1px solid #ccc; border-radius: 3px; }
-        
-        /* Note Window with Corner Button */
-        .note-wrapper { position: relative; width: 100%; }
-        textarea { width: 100%; height: 50px; font-size: 11px; padding: 4px; box-sizing: border-box; resize: vertical; border: 1px solid #ddd; }
-        .copy-btn { 
-            position: absolute; top: 2px; right: 2px; font-size: 9px; padding: 1px 4px; 
-            background: #eee; border: 1px solid #bbb; cursor: pointer; border-radius: 2px; opacity: 0.7;
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --light: #ecf0f1;
         }
-        .copy-btn:hover { opacity: 1; background: #ddd; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f4f7f6; }
+        h2 { color: var(--primary); }
+        
+        .controls { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
+        
+        table { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 0.85rem; }
+        th { background-color: var(--primary); color: white; position: sticky; top: 0; }
+        
+        .cell-container { display: flex; flex-direction: column; gap: 4px; min-width: 140px; position: relative; }
+        select, input[type="datetime-local"] { width: 100%; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 3px; }
+        
+        .note-area { width: 100%; height: 40px; font-size: 0.7rem; resize: none; margin-top: 4px; }
+        .copy-btn { 
+            position: absolute; bottom: 5px; right: 5px; 
+            font-size: 0.6rem; padding: 1px 3px; cursor: pointer;
+            background: var(--light); border: 1px solid #ccc; border-radius: 2px;
+        }
+        .copy-btn:hover { background: #ddd; }
 
-        .del-btn { background: #e74c3c; color: white; border: none; padding: 5px 8px; cursor: pointer; border-radius: 3px; }
-        #status { font-weight: bold; color: #27ae60; }
+        .btn { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; }
+        .btn-add { background: #27ae60; }
+        .btn-export { background: #f39c12; }
+        .btn-remove { background: #e74c3c; padding: 4px 8px; font-size: 0.7rem; }
+        
+        .global-note { margin-top: 20px; width: 100%; height: 60px; }
     </style>
 </head>
 <body>
 
-<div class="controls">
-    <input type="text" id="newId" placeholder="Task ID (e.g. SH005)">
-    <button onclick="addRow()" style="background: #27ae60; color: white; border: none; padding: 6px 15px; cursor: pointer; border-radius: 3px;">+ Add Task</button>
-    <span id="status">● Linked to CSV</span>
-</div>
+    <h2>Module Assembly Checklist</h2>
 
-<table id="checklistTable">
-    <thead><tr id="headRow"></tr></thead>
-    <tbody id="tableBody"></tbody>
-</table>
+    <div class="controls">
+        <input type="text" id="newTaskId" placeholder="Enter New Task ID (e.g. SH005)">
+        <button class="btn btn-add" onclick="addRow()">Add Row to Top</button>
+        <button class="btn btn-export" onclick="exportToCSV()">Export to CSV</button>
+    </div>
 
-<script>
-    const cols = ["Task ID", "HDI check", "Sensor-ROC check", "Module gluing", "Spacer gluing", "Wire bonding", "Pull test", "Carrier assembly", "Electrical test", "Shipped"];
-    const names = ["IK", "CJ", "AR", "JM", "JB"];
-    // Initial Rows
-    let rowData = [
-        {id: "SH004", rowNotes: ""}, {id: "SH003", rowNotes: ""}, 
-        {id: "SH002", rowNotes: ""}, {id: "SH001", rowNotes: ""}
-    ];
+    <table id="checkListTable">
+        <thead>
+            <tr id="headerRow">
+                <th>Task ID</th>
+                <th>HDI check</th>
+                <th>Sensor-ROC check</th>
+                <th>Module gluing</th>
+                <th>Spacer gluing</th>
+                <th>Wire bonding</th>
+                <th>Pull test</th>
+                <th>Carrier assembly</th>
+                <th>Electrical test</th>
+                <th>Shipped</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            </tbody>
+    </table>
 
-    function initHeader() {
-        const hr = document.getElementById('headRow');
-        cols.forEach(c => hr.innerHTML += `<th>${c}</th>`);
-        hr.innerHTML += `<th>Checklist Notes</th><th>Action</th>`;
-    }
+    <h3>General Checklist Notes</h3>
+    <textarea id="globalNotes" class="global-note" placeholder="Add general notes for the entire checklist here..." oninput="saveData()"></textarea>
 
-    function render() {
-        const body = document.getElementById('tableBody');
-        body.innerHTML = '';
-        rowData.forEach((row, rIdx) => {
-            let tr = document.createElement('tr');
-            cols.forEach(col => {
-                let td = document.createElement('td');
-                if (col === "Task ID") {
-                    td.innerHTML = `<strong>${row.id}</strong>`;
-                } else {
-                    const cell = row[col] || {t:'', n:'', m:''};
-                    td.innerHTML = `
-                        <div class="cell-container">
-                            <input type="datetime-local" value="${cell.t}" onchange="update(${rIdx},'${col}','t',this.value)">
-                            <select onchange="update(${rIdx},'${col}','n',this.value)">
-                                <option value="">Select Name</option>
-                                ${names.map(n => `<option value="${n}" ${cell.n===n?'selected':''}>${n}</option>`).join('')}
-                            </select>
-                            <div class="note-wrapper">
-                                <textarea onchange="update(${rIdx},'${col}','m',this.value)">${cell.m}</textarea>
-                                <button class="copy-btn" onclick="copyNote(this)">copy</button>
-                            </div>
-                        </div>`;
-                }
-                tr.appendChild(td);
-            });
-            // General Row Notes
-            tr.innerHTML += `<td><textarea style="height:80px" onchange="updateRowNote(${rIdx}, this.value)">${row.rowNotes}</textarea></td>`;
-            // Remove Column (Most Right)
-            tr.innerHTML += `<td><button class="del-btn" onclick="removeRow(${rIdx})">Delete</button></td>`;
-            body.appendChild(tr);
-        });
-    }
+    <script>
+        const names = ["IK", "CJ", "AR", "JM", "JB"];
+        const columns = ["HDI check", "Sensor-ROC", "Module glue", "Spacer glue", "Wire bond", "Pull test", "Carrier", "Electrical", "Shipped"];
+        let data = JSON.parse(localStorage.getItem('productionData')) || [
+            { id: "SH004", cells: {} },
+            { id: "SH003", cells: {} },
+            { id: "SH002", cells: {} },
+            { id: "SH001", cells: {} }
+        ];
 
-    function update(rIdx, col, field, val) {
-        if(!rowData[rIdx][col]) rowData[rIdx][col] = {t:'', n:'', m:''};
-        rowData[rIdx][col][field] = val;
-        sync();
-    }
-
-    function updateRowNote(rIdx, val) {
-        rowData[rIdx].rowNotes = val;
-        sync();
-    }
-
-    function addRow() {
-        const idInput = document.getElementById('newId');
-        if(!idInput.value) return;
-        // Newest to the top
-        rowData.unshift({id: idInput.value, rowNotes: ""});
-        idInput.value = '';
-        render();
-        sync();
-    }
-
-    function removeRow(rIdx) {
-        if(confirm("Remove row?")) {
-            rowData.splice(rIdx, 1);
-            render();
-            sync();
+        function init() {
+            renderTable();
+            document.getElementById('globalNotes').value = localStorage.getItem('globalNotes') || "";
         }
-    }
 
-    function copyNote(btn) {
-        const txt = btn.previousElementSibling.value;
-        navigator.clipboard.writeText(txt);
-        btn.innerText = "Done!";
-        setTimeout(() => btn.innerText = "copy", 1000);
-    }
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
 
-    async function sync() {
-        const status = document.getElementById('status');
-        status.innerText = "● Syncing...";
-        status.style.color = "orange";
-        await fetch('/save', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(rowData)
-        });
-        status.innerText = "● Saved to CSV";
-        status.style.color = "#27ae60";
-    }
+            data.forEach((row, rowIndex) => {
+                const tr = document.createElement('tr');
+                
+                // Task ID Column
+                tr.innerHTML += `<td><strong>${row.id}</strong></td>`;
 
-    initHeader();
-    render();
-</script>
+                // Data Columns
+                for(let i = 0; i < 9; i++) {
+                    const cellData = row.cells[i] || { time: "", name: "", note: "" };
+                    tr.appendChild(createCell(rowIndex, i, cellData));
+                }
+
+                // Remove Action Column (Far Right)
+                tr.innerHTML += `<td><button class="btn btn-remove" onclick="removeRow(${rowIndex})">Remove</button></td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function createCell(rowIndex, colIndex, cellData) {
+            const td = document.createElement('td');
+            let options = names.map(n => `<option value="${n}" ${cellData.name === n ? 'selected' : ''}>${n}</option>`).join('');
+            
+            td.innerHTML = `
+                <div class="cell-container">
+                    <input type="datetime-local" value="${cellData.time}" onchange="updateCell(${rowIndex}, ${colIndex}, 'time', this.value)">
+                    <select onchange="updateCell(${rowIndex}, ${colIndex}, 'name', this.value)">
+                        <option value="">--Name--</option>
+                        ${options}
+                    </select>
+                    <textarea class="note-area" placeholder="Note..." oninput="updateCell(${rowIndex}, ${colIndex}, 'note', this.value)">${cellData.note}</textarea>
+                    <button class="copy-btn" onclick="copyNote(this)">copy</button>
+                </div>
+            `;
+            return td;
+        }
+
+        function updateCell(rowIndex, colIndex, field, value) {
+            if (!data[rowIndex].cells[colIndex]) data[rowIndex].cells[colIndex] = {};
+            data[rowIndex].cells[colIndex][field] = value;
+            saveData();
+        }
+
+        function addRow() {
+            const idInput = document.getElementById('newTaskId');
+            if (!idInput.value) return alert("Enter Task ID");
+            
+            // Unshift adds to the top (newest first)
+            data.unshift({ id: idInput.value, cells: {} });
+            idInput.value = '';
+            saveData();
+            renderTable();
+        }
+
+        function removeRow(index) {
+            if(confirm("Delete this row?")) {
+                data.splice(index, 1);
+                saveData();
+                renderTable();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('productionData', JSON.stringify(data));
+            localStorage.setItem('globalNotes', document.getElementById('globalNotes').value);
+        }
+
+        function copyNote(btn) {
+            const text = btn.previousElementSibling.value;
+            navigator.clipboard.writeText(text);
+            const original = btn.innerText;
+            btn.innerText = "✓";
+            setTimeout(() => btn.innerText = original, 1000);
+        }
+
+        function exportToCSV() {
+            let csv = "Task ID,HDI check Time,Name,Notes,Sensor-ROC Time,Name,Notes,Module Glue Time,Name,Notes...\n";
+            data.forEach(row => {
+                let line = `"${row.id}"`;
+                for(let i=0; i<9; i++) {
+                    const c = row.cells[i] || {time:'', name:'', note:''};
+                    line += `,"${c.time}","${c.name}","${c.note.replace(/"/g, '""')}"`;
+                }
+                csv += line + "\n";
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', `checklist_export_${new Date().toLocaleDateString()}.csv`);
+            a.click();
+        }
+
+        init();
+    </script>
 </body>
 </html>
