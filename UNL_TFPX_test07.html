@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Production Checklist Manager</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background: #f0f2f5; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        
+        header { display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 20px; gap: 10px; }
+        .controls { display: flex; gap: 10px; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #004a99; color: white; white-space: nowrap; }
+        
+        .cell-box { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+        input[type="datetime-local"], select, textarea { 
+            width: 100%; border: 1px solid #ccc; border-radius: 3px; box-sizing: border-box; 
+        }
+        
+        .note-container { position: relative; margin-top: 4px; }
+        .copy-btn { 
+            position: absolute; right: 2px; top: 2px; font-size: 9px; 
+            padding: 1px 4px; cursor: pointer; background: #f8f9fa; border: 1px solid #bbb;
+            border-radius: 2px;
+        }
+        .copy-btn:hover { background: #e2e6ea; }
+
+        .btn { padding: 10px 18px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; transition: 0.2s; }
+        .btn-add { background: #28a745; color: white; }
+        .btn-add:hover { background: #218838; }
+        .btn-sync { background: #007bff; color: white; }
+        .btn-sync:hover { background: #0069d9; }
+        .btn-del { background: #dc3545; color: white; padding: 6px 10px; font-size: 11px; }
+
+        .status { font-size: 12px; color: #666; }
+        textarea { height: 45px; resize: vertical; padding-top: 15px; }
+        .task-id-input { font-weight: bold; border: 1px solid transparent; background: transparent; width: 80px; padding: 4px; }
+        .task-id-input:focus { border-color: #007bff; background: #fff; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h2>Production Checklist Management</h2>
+        <div class="controls">
+            <button class="btn btn-sync" onclick="setupFileSync()">Link & Load CSV File</button>
+            <button class="btn btn-add" onclick="addRow()">Add New Task (Top)</button>
+        </div>
+        <div class="status" id="fileStatus">Status: Not connected to CSV.</div>
+    </header>
+
+    <table id="checklistTable">
+        <thead>
+            <tr id="headerRow">
+                </tr>
+        </thead>
+        <tbody id="tableBody">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    const columns = ["Task ID", "HDI check", "Sensor-ROC check", "Module gluing", "Spacer gluing", "Wire bonding", "Pull test", "Carrier assembly", "Electrical test", "Shipped"];
+    const users = ["IK", "CJ", "AR", "JM", "JB", "BF", "AM"];
+    let fileHandle = null;
+
+    // Default starting rows
+    let rows = [
+        { id: "SH004", data: {} },
+        { id: "SH003", data: {} },
+        { id: "SH002", data: {} },
+        { id: "SH001", data: {} }
+    ];
+
+    function initHeader() {
+        const tr = document.getElementById('headerRow');
+        columns.forEach(col => {
+            const th = document.createElement('th');
+            th.innerText = col;
+            tr.appendChild(th);
+        });
+        const actionTh = document.createElement('th');
+        actionTh.innerText = "Actions";
+        tr.appendChild(actionTh);
+    }
+
+    async function setupFileSync() {
+        try {
+            [fileHandle] = await window.showOpenFilePicker({
+                types: [{ description: 'CSV Files', accept: {'text/csv': ['.csv']} }],
+                multiple: false
+            });
+            
+            // Try to load existing data from the file
+            const file = await fileHandle.getFile();
+            const content = await file.text();
+            if (content.trim().length > 0) {
+                parseCSV(content);
+            }
+
+            document.getElementById('fileStatus').innerText = "Status: Linked to " + fileHandle.name;
+            renderTable();
+        } catch (err) {
+            console.error("File access denied or cancelled", err);
+        }
+    }
+
+    function parseCSV(content) {
+        const lines = content.split('\n');
+        if (lines.length < 2) return;
+        
+        const newRows = [];
+        // Skip header
+        for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            // Simple CSV parser for quoted strings
+            const parts = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+            const rowId = parts[0].replace(/"/g, '');
+            const rowData = {};
+            
+            columns.slice(1).forEach((col, idx) => {
+                const cellRaw = (parts[idx+1] || "").replace(/"/g, '');
+                const [time, name, note] = cellRaw.split(' | ');
+                rowData[col] = { time: time || '', name: name || '', note: note || '' };
+            });
+            newRows.push({ id: rowId, data: rowData });
+        }
+        if (newRows.length > 0) rows = newRows;
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        rows.forEach((row, rIdx) => {
+            const tr = document.createElement('tr');
+            
+            columns.forEach((col) => {
+                const td = document.createElement('td');
+                if (col === "Task ID") {
+                    td.innerHTML = `<input class="task-id-input" value="${row.id}" onchange="updateId(${rIdx}, this.value)">`;
+                } else {
+                    const cellData = row.data[col] || { time: '', name: '', note: '' };
+                    td.innerHTML = `
+                        <div class="cell-box">
+                            <input type="datetime-local" value="${cellData.time}" onchange="updateCell(${rIdx}, '${col}', 'time', this.value)">
+                            <select onchange="updateCell(${rIdx}, '${col}', 'name', this.value)">
+                                <option value="">- Name -</option>
+                                ${users.map(u => `<option value="${u}" ${cellData.name === u ? 'selected' : ''}>${u}</option>`).join('')}
+                            </select>
+                            <div class="note-container">
+                                <button class="copy-btn" onclick="copyNote(this)">copy</button>
+                                <textarea onchange="updateCell(${rIdx}, '${col}', 'note', this.value)" placeholder="Add notes...">${cellData.note}</textarea>
+                            </div>
+                        </div>
+                    `;
+                }
+                tr.appendChild(td);
+            });
+
+            // Action Column on the far right
+            const actionTd = document.createElement('td');
+            actionTd.innerHTML = `<button class="btn btn-del" onclick="removeRow(${rIdx})">Remove</button>`;
+            tr.appendChild(actionTd);
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function updateId(rIdx, val) { rows[rIdx].id = val; syncToCSV(); }
+
+    function updateCell(rIdx, col, field, val) {
+        if (!rows[rIdx].data[col]) rows[rIdx].data[col] = { time: '', name: '', note: '' };
+        rows[rIdx].data[col][field] = val;
+        syncToCSV(); 
+    }
+
+    function addRow() {
+        const newId = "SH" + String(rows.length + 1).padStart(3, '0');
+        rows.unshift({ id: newId, data: {} }); 
+        renderTable();
+        syncToCSV();
+    }
+
+    function removeRow(index) {
+        if(confirm("Delete this row?")) {
+            rows.splice(index, 1);
+            renderTable();
+            syncToCSV();
+        }
+    }
+
+    function copyNote(btn) {
+        const txt = btn.nextElementSibling.value;
+        navigator.clipboard.writeText(txt).then(() => {
+            const orig = btn.innerText;
+            btn.innerText = "Copied!";
+            setTimeout(() => btn.innerText = orig, 1000);
+        });
+    }
+
+    async function syncToCSV() {
+        if (!fileHandle) return;
+        
+        let csvContent = columns.join(",") + "\n";
+        rows.forEach(row => {
+            let line = [row.id];
+            columns.slice(1).forEach(col => {
+                const c = row.data[col] || {time:'', name:'', note:''};
+                // Escape notes for CSV safety
+                const safeNote = c.note.replace(/"/g, '""');
+                line.push(`"${c.time} | ${c.name} | ${safeNote}"`);
+            });
+            csvContent += line.join(",") + "\n";
+        });
+
+        try {
+            const writable = await fileHandle.createWritable();
+            await writable.write(csvContent);
+            await writable.close();
+        } catch (e) {
+            console.error("Auto-sync failed. Permission may have expired.", e);
+        }
+    }
+
+    // Initialize UI
+    initHeader();
+    renderTable();
+</script>
+
+</body>
+</html>
